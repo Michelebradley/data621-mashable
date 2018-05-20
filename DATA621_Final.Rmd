@@ -1,0 +1,491 @@
+---
+title: "DATA 621 MASHABLE Project"
+author: "Puneet Auluck, Michele Bradley, Ahsanul Choudhury"
+date: "May 13, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r, message=F, warning=F, echo=TRUE}
+# Load requried packages
+if (!require('kableExtra')) (install.packages('kableExtra'))
+if (!require('reshape2')) (install.packages('reshape2'))
+#if (!require('DataExplorer')) (install.packages('DataExplorer'))
+if (!require('ggplot2')) (install.packages('ggplot2'))
+if (!require('gridExtra')) (install.packages('gridExtra'))
+#if (!require('cowplot')) (install.packages('cowplot'))
+```
+
+# Generate Train and Test Datasets
+
+```{r}
+news_popularity = read.csv("https://raw.githubusercontent.com/Michelebradley/data621-mashable/master/OnlineNewsPopularity.csv", as.is = TRUE)
+#news_popularity = read.csv("OnlineNewsPopularity.csv", as.is = TRUE)
+smp_size <- floor(0.75 * nrow(news_popularity))
+## set the seed to make your partition reproducible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(news_popularity)), size = smp_size)
+train <- news_popularity[train_ind, ]
+test <- news_popularity[-train_ind, ]
+```
+
+
+# Generate Table of Descriptive Statistics
+
+```{r, eval=FALSE}
+
+qualitiative_train = select_if(train, is.numeric)
+training_summary_df <- do.call(data.frame, 
+           list(n = sapply(qualitiative_train, function(x) length(x[!is.na(x)])),
+                mean = round(sapply(qualitiative_train, function(x) mean(x, na.rm=TRUE)), 2),
+                median = round(sapply(qualitiative_train, function(x) median(x, na.rm=TRUE)), 2),
+                sd = round(sapply(qualitiative_train, function(x) sd(x, na.rm=TRUE)), 2),
+                se = round(sapply(qualitiative_train, function(x) sd(x,na.rm=TRUE)/(sqrt(length(x[!is.na(x)])))), 2),
+                min = round(sapply(qualitiative_train, function(x) min(x, na.rm=TRUE)), 2),
+                max = round(sapply(qualitiative_train, function(x) max(x, na.rm=TRUE)), 2),
+                range = round(sapply(qualitiative_train, function(x) max(x, na.rm=TRUE) - min(x, na.rm=TRUE)), 2),
+                kurtosis = round(sapply(qualitiative_train, function(x) kurtosis(x, na.rm=TRUE))), 2))
+kable(training_summary_df, format = "html") %>%
+  kable_styling(c("striped", "bordered"))
+
+
+
+
+```
+
+
+# Generate Boxplots
+
+```{r, eval=FALSE}
+twenty <- qualitiative_train[,1:20]
+fourty <- qualitiative_train[,21:40]
+sixty <- qualitiative_train[,41:60]
+meltData <- melt(twenty)
+p <- ggplot(meltData, aes(factor(variable), value)) 
+p + geom_boxplot() + facet_wrap(~variable, scale="free")
+meltData <- melt(fourty)
+p <- ggplot(meltData, aes(factor(variable), value)) 
+p + geom_boxplot() + facet_wrap(~variable, scale="free")
+meltData <- melt(sixty)
+p <- ggplot(meltData, aes(factor(variable), value)) 
+p + geom_boxplot() + facet_wrap(~variable, scale="free")
+
+
+```
+
+# GenerateDensity Plots
+
+```{r, eval=FALSE}
+
+twenty <- qualitiative_train[,1:20]
+fourty <- qualitiative_train[,21:40]
+sixty <- qualitiative_train[,41:60]
+meltData <- melt(twenty)
+p <- ggplot(meltData, aes(factor(variable), value)) 
+p + geom_boxplot() + facet_wrap(~variable, scale="free")
+meltData <- melt(fourty)
+p <- ggplot(meltData, aes(factor(variable), value)) 
+p + geom_boxplot() + facet_wrap(~variable, scale="free")
+meltData <- melt(sixty)
+p <- ggplot(meltData, aes(factor(variable), value)) 
+p + geom_boxplot() + facet_wrap(~variable, scale="free")
+
+
+
+```
+
+
+# Multicollinearity
+
+We will look at correlation between the variable to see if there is any multicollinearity among the variables in our dataset. First, we have created a correlation matrix heatmap to visualize the correlation matrix.
+```{r}
+cormat <- round(cor(train[-1]),2)
+#plot_correlation(cormat)
+```
+
+\newpage
+The correlation matrix heatmap shows there are some highly correlated variables in our dataset. The following table shows the variable with correlation value of 0.6 more.
+```{r}
+cormatdiag <- cormat
+
+for(x in c(1:(ncol(cormatdiag)-1))){
+
+  cormatdiag[x,c((x+1):ncol(cormatdiag))] <- 0
+}
+
+melted_cormat <- melt(cormatdiag)
+melted_cormat <- subset(melted_cormat, abs(value) >=.6)
+melted_cormat[melted_cormat==1] <- NA
+melted_cormat<-melted_cormat[complete.cases(melted_cormat),]
+melted_cormat <- cbind.data.frame(Index=c(1:nrow(melted_cormat)), melted_cormat)
+row.names(melted_cormat) <- NULL
+#kable(melted_cormat)
+
+#kable(melted_cormat[order(abs(melted_cormat$value),decreasing=TRUE),], "html")  %>%
+#  kable_styling(bootstrap_options = "striped", full_width = F, position = "left",  font_size = 9)
+
+kable(melted_cormat, "html")  %>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left",  font_size =10)
+
+```
+
+### KW_AVG_MIN & KW_MAX_MIN
+
+There is a strong positive correlation between kw_avg_min (average share of worst keywords) with kw_max_min (maximum shares of worst keywords). The correlation coefficent is 0.94 and $R^2$ from regression summary is 0.89.
+
+```{r}
+kw_avgmin_maxmin <- lm(kw_avg_min ~ kw_max_min, data=train)
+summary(kw_avgmin_maxmin)
+
+ggplot(train, aes(x=train$kw_max_min, y=train$kw_avg_min)) +
+    geom_point(shape=1) +    # Use hollow circles
+    geom_smooth(method=lm,   # Add linear regression line
+                se=FALSE) +
+  scale_x_continuous("kw_max_min") +
+  scale_y_continuous("kw_avg_min") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle(expression(paste("corr = 0.94", ", ", R^2," = 0.89" ,sep="")))
+
+```
+
+### KW_MAX_MAX & KW_MIN_MIN
+
+The correlation coefficent value at -0.86 shows moderate negative correlation between kw_max_max (max. shares of best keywords) with kw_min_min (min. shares of worst keywords). The summary from regression model between these two predictors shows $R^2=0.73$.
+
+```{r}
+
+kw_maxmax_minmin <- lm((kw_max_max) ~ kw_min_min, data=train)
+summary(kw_maxmax_minmin)
+plot(train$kw_min_min,(train$kw_max_max), xlab="kw_min_min", ylab="kw_max_max" )
+abline(kw_maxmax_minmin , col="red")
+
+
+ggplot2::ggplot(train, aes(x=train$kw_min_min, y=train$kw_max_max)) +
+    geom_point(shape=1) +    # Use hollow circles
+    geom_smooth(method=lm,   # Add linear regression line
+                se=FALSE) +
+  scale_x_continuous("kw_min_min") +
+  scale_y_continuous("kw_max_max") +
+  #theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle(expression(paste("corr = -0.86", ", ", R^2," = 0.73" ,sep="")))
+
+```
+
+
+
+# SELF_REFERENCE_AVG_SHARESS with SELF_REFERENCE_MIN_SHARES & SELF_REFERENCE_MAX_SHARES
+
+```{r}
+
+
+self_avg_min <- lm(self_reference_avg_sharess ~ self_reference_min_shares, data=train)
+self_avg_max <- lm(self_reference_avg_sharess ~ self_reference_max_shares, data=train)
+
+summary(self_avg_min)
+summary(self_avg_max)
+
+par(mfrow=c(1,2))
+
+plot(train$self_reference_min_shares,(train$self_reference_avg_sharess), xlab="self_reference_min_shares", ylab="self_reference_avg_sharess" )
+abline(self_avg_min, col="red")
+
+plot(train$self_reference_max_shares,(train$self_reference_avg_sharess), xlab="self_reference_max_shares", ylab="self_reference_avg_sharess" )
+abline(self_avg_max, col="red")
+
+refplot1 <- ggplot(train, aes(x=train$self_reference_min_shares, y=train$self_reference_avg_sharess)) +
+    geom_point(shape=1) +    # Use hollow circles
+    geom_smooth(method=lm,   # Add linear regression line
+                se=FALSE) +
+  scale_x_continuous("self_reference_min_shares") +
+  scale_y_continuous("self_reference_avg_sharess") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle(expression(paste("corr = 0.81", ", ", R^2," = 0.65" ,sep="")))
+
+refplot2 <- ggplot(train, aes(x=train$self_reference_max_shares, y=train$self_reference_avg_sharess)) +
+    geom_point(shape=1) +    # Use hollow circles
+    geom_smooth(method=lm,   # Add linear regression line
+                se=FALSE) +
+  scale_x_continuous("self_reference_max_shares") +
+  scale_y_continuous("self_reference_avg_sharess") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle(expression(paste("corr = 0.85", ", ", R^2," = 0.73" ,sep="")))
+refplot2 
+library(gridExtra)
+grid.arrange(refplot1, refplot2, ncol=2)
+
+
+```
+
+
+
+### LDA's with DATA CHANNELS
+
+```{r}
+lm_bus_lda00 <- lm(data_channel_is_bus ~ LDA_00, data=train)
+summary(lm_bus_lda00)
+
+lm_ent_lda01 <- lm(data_channel_is_entertainment ~ LDA_01, data=train)
+summary(lm_ent_lda01)
+
+
+lm_wld_lda02 <- lm(data_channel_is_world ~ LDA_02, data=train)
+summary(lm_wld_lda02)
+
+
+lm_tch_lda04 <- lm(data_channel_is_tech ~ LDA_04, data=train)
+summary(lm_tch_lda04)
+
+dcldplot1 <- ggplot(train, aes(x=factor(train$data_channel_is_bus), y=train$LDA_00)) +
+    geom_boxplot() +    # Use hollow circles
+  xlab("data_channel_is_bus") +
+  ylab("LDA_00") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle("corr = 0.77")
+
+dcldplot2 <- ggplot(train, aes(x=factor(train$data_channel_is_entertainment), y=train$LDA_01)) +
+    geom_boxplot() +    # Use hollow circles
+  xlab("data_channel_is_entertainment") +
+  ylab("LDA_01") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle("corr = 0.60")
+
+
+
+
+dcldplot3 <- ggplot(train, aes(x=factor(train$data_channel_is_world), y=train$LDA_02)) +
+    geom_boxplot() +    # Use hollow circles
+  xlab("data_channel_is_world") +
+  ylab("LDA_02") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle("corr = 0.84")
+
+
+dcldplot4 <- ggplot(train, aes(x=factor(train$data_channel_is_tech), y=train$LDA_04)) +
+    geom_boxplot() +    # Use hollow circles
+  xlab("data_channel_is_tech") +
+  ylab("LDA_04") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle("corr = 0.75")
+
+grid.arrange(dcldplot1, dcldplot2,dcldplot3, dcldplot4, ncol=4)
+
+```
+
+
+# Data Preparation
+
+
+# Same Data Boxplots
+
+```{r}
+train$news_type <- rep("Lifestyle", nrow(train))
+train$news_type[train$data_channel_is_entertainment==1] <- "Entertainment"
+train$news_type[train$data_channel_is_socmed==1] <- "Social Media"
+train$news_type[train$data_channel_is_tech==1] <- "Tech"
+train$news_type[train$data_channel_is_world==1] <- "World"
+train$news_type[train$data_channel_is_bus==1] <- "Business"
+
+p1 <- ggplot(data=train, aes(as.factor(news_type), log(shares)))
+p1 + geom_boxplot()
+
+train$news_day <- rep("Sunday", nrow(train))
+train$news_day[train$weekday_is_monday==1] <- "Monday"
+train$news_day[train$weekday_is_tuesday==1] <- "Tuesday"
+train$news_day[train$weekday_is_wednesday==1] <- "Wednesday"
+train$news_day[train$weekday_is_thursday==1] <- "Thursday"
+train$news_day[train$weekday_is_friday==1] <- "Friday"
+train$news_day[train$weekday_is_saturday==1] <- "Saturday"
+p2 <- ggplot(data=train, aes(as.factor(news_day), log(shares)))
+p2 + geom_boxplot()
+dev.off()
+training_manipulation = train
+
+```
+
+Most of these variables between variable 19 and variable 27 are minimum, maximum and average of keywords and since calculation of average includes both minimum and maximum we will only keep the average column and remove the minimum and maximum columns. weekday_is_saturday and weekday_is_sunday are included in is_weekend so we will remove the former two and only keep is_weekend. We will also create new binary variable is_weekday by combining and removing weekday_is_monday, weekday_is_tuesday, weekday_is_wednesday, weekday_is_thursday, and weekday_is_friday. 
+
+
+```{r}
+
+training_manipulation$is_weekday <- rowSums(train[,c("weekday_is_monday","weekday_is_tuesday",
+                                                     "weekday_is_wednesday", "weekday_is_thursday",
+                                                     "weekday_is_friday")])
+
+```
+
+
+## kw_avg_min
+```{r}
+has_neg <- nrow(training_manipulation[training_manipulation$kw_avg_min<0,])
+has_neg
+
+```
+kw_avg_min has a total of 611 negative entry, we should consider removing the variable.
+
+
+## kw_avg_avg
+```{r}
+match(0, training_manipulation$kw_avg_avg)
+training_manipulation$kw_avg_avg_sqrt = sqrt(training_manipulation$kw_avg_avg)
+density1 <- train %>%
+  ggplot(aes(kw_avg_avg)) +          
+    geom_density()
+density2 <- training_manipulation %>%
+  ggplot(aes(kw_avg_avg_sqrt)) +          
+    geom_density()
+grid.arrange(density1, density2, ncol=2)
+dev.off()
+summary(train$kw_avg_avg)
+summary(training_manipulation$kw_avg_avg_sqrt)
+```
+kw_avg_avg is right skwed. Since the variable contains 0's, we will take the square root of the variable to normalize this variable The new summary is shown below the two density plots. The density plot on the left is our original data distribution while the density plot on the right shows our new variable distribution.
+
+
+## self_reference_min_shares
+self_reference_min_shares is right skwed. Since the variable contains 0's, we will take the square root of the variable to normalize this variable The new summary is shown below the two density plots. The density plot on the left is our original data distribution while the density plot on the right shows our new variable distribution.
+
+```{r}
+match(0, training_manipulation$self_reference_min_shares)
+training_manipulation$self_reference_min_shares_sqrt = sqrt(training_manipulation$self_reference_min_shares)
+density1 <- train %>%
+  ggplot(aes(self_reference_min_shares)) +          
+    geom_density()
+density2 <- training_manipulation %>%
+  ggplot(aes(self_reference_min_shares_sqrt)) +          
+    geom_density()
+grid.arrange(density1, density2, ncol=2)
+dev.off()
+#summary(train$self_reference_min_shares)
+summary(training_manipulation$self_reference_min_shares_sqrt)
+```
+
+## self_reference_max_shares
+self_reference_max_shares is right skwed. Since the variable contains 0's, we will take the square root of the variable to normalize this variable The new summary is shown below the two density plots. The density plot on the left is our original data distribution while the density plot on the right shows our new variable distribution.
+```{r}
+match(0, training_manipulation$self_reference_max_shares)
+training_manipulation$self_reference_max_shares_sqrt = sqrt(training_manipulation$self_reference_max_shares)
+density1 <- train %>%
+  ggplot(aes(self_reference_max_shares)) +          
+    geom_density()
+density2 <- training_manipulation %>%
+  ggplot(aes(self_reference_max_shares_sqrt)) +          
+    geom_density()
+grid.arrange(density1, density2, ncol=2)
+dev.off()
+#summary(train$self_reference_max_shares)
+summary(training_manipulation$self_reference_max_shares_sqrt)
+
+```
+
+## self_reference_avg_sharess
+self_reference_avg_sharess is right skwed. Since the variable contains 0's, we will take the square root of the variable to normalize this variable The new summary is shown below the two density plots. The density plot on the left is our original data distribution while the density plot on the right shows our new variable distribution.
+
+```{r}
+match(0, training_manipulation$self_reference_avg_sharess)
+training_manipulation$self_reference_avg_sharess_sqrt = sqrt(training_manipulation$self_reference_avg_sharess)
+density1 <- train %>%
+  ggplot(aes(self_reference_avg_sharess)) +          
+    geom_density()
+density2 <- training_manipulation %>%
+  ggplot(aes(self_reference_avg_sharess_sqrt)) +          
+    geom_density()
+grid.arrange(density1, density2, ncol=2)
+dev.off()
+#summary(train$self_reference_avg_sharess)
+summary(training_manipulation$self_reference_avg_sharess_sqrt)
+
+```
+
+
+# global_rate_positive_words (use)
+```{r}
+match(0, training_manipulation$global_rate_positive_words)
+training_manipulation$global_rate_positive_words <- train$global_rate_positive_words
+training_manipulation$global_rate_positive_words_sqrt = sqrt(training_manipulation$global_rate_positive_words)
+density1 <- train %>%
+  ggplot(aes(global_rate_positive_words)) +          
+    geom_density()
+density2 <- training_manipulation %>%
+  ggplot(aes(global_rate_positive_words_sqrt)) +          
+    geom_density()
+grid.arrange(density1, density2, ncol=2)
+
+dev.off()
+summary(training_manipulation$global_rate_positive_words_sqrt)
+
+
+```
+
+##global_rate_negative_words (use)
+
+```{r}
+match(0, training_manipulation$global_rate_negative_words)
+training_manipulation$global_rate_negative_words <- train$global_rate_negative_words
+training_manipulation$global_rate_negative_words_sqrt = sqrt(training_manipulation$global_rate_negative_words)
+density1 <- train %>%
+  ggplot(aes(global_rate_negative_words)) +          
+    geom_density()
+density2 <- training_manipulation %>%
+  ggplot(aes(global_rate_negative_words_sqrt)) +          
+    geom_density()
+grid.arrange(density1, density2, ncol=2)
+dev.off()
+summary(training_manipulation$global_rate_negative_words_sqrt)
+
+```
+
+##shares (use)
+
+```{r}
+match(0, training_manipulation$shares)
+training_manipulation$shares <- train$shares
+training_manipulation$shares_log = log(training_manipulation$shares)
+density1 <- train %>%
+  ggplot(aes(shares)) +          
+    geom_density()
+density2 <- training_manipulation %>%
+  ggplot(aes(shares_log)) +          
+    geom_density()
+grid.arrange(density1, density2, ncol=2)
+dev.off()
+summary(training_manipulation$shares_log)
+
+```
+
+## variables dropped within 40-60 
+```{r}
+                                                    
+drops_in_forty <- c("kw_min_min", "kw_max_min", "kw_min_max",
+           "kw_max_max", "kw_min_avg",
+           "kw_max_avg","weekday_is_monday",
+           "weekday_is_tuesday", "weekday_is_wednesday",
+           "weekday_is_thursday","weekday_is_friday",
+           "weekday_is_saturday", "weekday_is_sunday",
+           "self_reference_avg_sharess","self_reference_max_shares",
+           "self_reference_min_shares","kw_avg_avg")
+
+
+training_manipulation <- training_manipulation[ , !(names(training_manipulation) %in% drops_in_forty)]
+
+drops_in_sixty <- c("LDA_00", "LDA_01", "LDA_02", "LDA_03", "LDA_04",
+                    "rate_positive_words","rate_negative_words",
+                    "min_positive_polarity","min_negative_polarity",
+                    "max_positive_polarity","max_negative_polarity",
+                    "abs_title_subjectivity","abs_title_sentiment_polarity",
+                    "url","shares","global_rate_negative_words","global_rate_positive_words")
+training_manipulation <- training_manipulation[ , !(names(training_manipulation) %in% drops_in_sixty)]
+
+
+```
+
+
+
+
