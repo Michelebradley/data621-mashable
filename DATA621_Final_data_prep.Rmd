@@ -1,0 +1,135 @@
+---
+title: "DATA 621 MASHABLE Project"
+author: "Puneet Auluck, Michele Bradley, Ahsanul Choudhury"
+date: "May 13, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r, message=F, warning=F, echo=TRUE}
+# Load requried packages
+if (!require('kableExtra')) (install.packages('kableExtra'))
+if (!require('reshape2')) (install.packages('reshape2'))
+#if (!require('DataExplorer')) (install.packages('DataExplorer'))
+if (!require('ggplot2')) (install.packages('ggplot2'))
+if (!require('gridExtra')) (install.packages('gridExtra'))
+#if (!require('cowplot')) (install.packages('cowplot'))
+```
+
+# Generate Train and Test Datasets
+
+```{r}
+news_popularity = read.csv("https://raw.githubusercontent.com/Michelebradley/data621-mashable/master/OnlineNewsPopularity.csv", as.is = TRUE)
+#news_popularity = read.csv("OnlineNewsPopularity.csv", as.is = TRUE)
+smp_size <- floor(0.75 * nrow(news_popularity))
+## set the seed to make your partition reproducible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(news_popularity)), size = smp_size)
+train <- news_popularity[train_ind, ]
+test <- news_popularity[-train_ind, ]
+```
+
+
+
+# Data Preparation
+
+
+# Same Data Boxplots
+
+```{r}
+train$news_type <- rep("Lifestyle", nrow(train))
+train$news_type[train$data_channel_is_entertainment==1] <- "Entertainment"
+train$news_type[train$data_channel_is_socmed==1] <- "Social Media"
+train$news_type[train$data_channel_is_tech==1] <- "Tech"
+train$news_type[train$data_channel_is_world==1] <- "World"
+train$news_type[train$data_channel_is_bus==1] <- "Business"
+
+p1 <- ggplot(data=train, aes(as.factor(news_type), log(shares)))
+#p1 + geom_boxplot()
+
+train$news_day <- rep("Sunday", nrow(train))
+train$news_day[train$weekday_is_monday==1] <- "Monday"
+train$news_day[train$weekday_is_tuesday==1] <- "Tuesday"
+train$news_day[train$weekday_is_wednesday==1] <- "Wednesday"
+train$news_day[train$weekday_is_thursday==1] <- "Thursday"
+train$news_day[train$weekday_is_friday==1] <- "Friday"
+train$news_day[train$weekday_is_saturday==1] <- "Saturday"
+#p2 <- ggplot(data=train, aes(as.factor(news_day), log(shares)))
+#p2 + geom_boxplot()
+
+
+```
+
+```{r}
+training_manipulation = train
+
+## kw_avg_avg
+training_manipulation$kw_avg_avg_sqrt = sqrt(training_manipulation$kw_avg_avg)
+
+## self_reference_min_shares
+training_manipulation$self_reference_min_shares_sqrt = sqrt(training_manipulation$self_reference_min_shares)
+
+## self_reference_max_shares
+training_manipulation$self_reference_max_shares_sqrt = sqrt(training_manipulation$self_reference_max_shares)
+
+## self_reference_avg_sharess
+training_manipulation$self_reference_avg_sharess_sqrt = sqrt(training_manipulation$self_reference_avg_sharess)
+
+# global_rate_positive_words (use)
+training_manipulation$global_rate_positive_words_sqrt = sqrt(training_manipulation$global_rate_positive_words)
+
+##global_rate_negative_words (use)
+training_manipulation$global_rate_negative_words_sqrt = sqrt(training_manipulation$global_rate_negative_words)
+
+##shares (use)
+training_manipulation$shares_log = log(training_manipulation$shares)
+
+## variables dropped within 40-60 
+
+drops_in_forty <- c("kw_min_min", "kw_max_min", "kw_min_max",
+           "kw_max_max", "kw_min_avg",
+           "kw_max_avg","weekday_is_monday",
+           "weekday_is_tuesday", "weekday_is_wednesday",
+           "weekday_is_thursday","weekday_is_friday",
+           "weekday_is_saturday", "weekday_is_sunday", "is_weekend",
+           "self_reference_avg_sharess","self_reference_max_shares",
+           "self_reference_min_shares","kw_avg_avg")
+
+
+training_manipulation <- training_manipulation[ , !(names(training_manipulation) %in% drops_in_forty)]
+
+drops_in_sixty <- c("LDA_00", "LDA_01", "LDA_02", "LDA_03", "LDA_04",
+                    "rate_positive_words","rate_negative_words",
+                    "min_positive_polarity","min_negative_polarity",
+                    "max_positive_polarity","max_negative_polarity",
+                    "abs_title_subjectivity","abs_title_sentiment_polarity",
+                    "url","shares","global_rate_negative_words","global_rate_positive_words")
+training_manipulation <- training_manipulation[ , !(names(training_manipulation) %in% drops_in_sixty)]
+
+drops_extra <- c("data_channel_is_lifestyle", "data_channel_is_entertainment", "data_channel_is_bus",
+                 "data_channel_is_socmed", "data_channel_is_tech",
+                  "data_channel_is_world")
+training_manipulation <- training_manipulation[ , !(names(training_manipulation) %in% drops_extra)]
+
+```
+
+```{r}
+
+lm1 <- lm(shares_log ~ ., data = training_manipulation)
+
+summary(lm1)
+
+
+```
+
+
+
+
